@@ -145,8 +145,7 @@ result <- res %>%
     mutate(slope = SLOPE_QGIS,
            aspect = ASPECT_QGIS,
            soil_max = 100,
-           hock = 4) %>%
-    
+           hock = 4) %>%    
     mutate(F = get_f(tmean),
            RAIN = get_rain(ppt, F),
            SNOW = get_snow(ppt, F),
