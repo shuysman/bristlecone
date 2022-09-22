@@ -158,14 +158,14 @@ result <- res %>%
            Days = days_in_month(mon),
            DL = get_dl(mon, Days, Lat),
            A = abs(180 - abs(aspect - 225)), # folded aspect
-           HL = get_hl(Lat, slope, A)) %>%
-    mutate(e = 0.611 * exp((17.3 * tmean) / (tmean + 237.3)),
-           PET = 29.8 * Days * DL * HL * (e / (tmean + 273.2))) %>%
+           HL = get_hl(Lat, slope, A),
+           e = 0.611 * exp((17.3 * tmean) / (tmean + 237.3)),
+           PET = 29.8 * Days * DL * HL * (e / (tmean + 273.2)),
            #PET = 29.8 * Days * DL * (e / (tmean + 273.2))) %>%
-    mutate(SOIL = get_soil(soil_max, W, PET)) %>%
-    mutate(dSOIL = get_d_soil(SOIL)) %>%
-    mutate(AET = get_aet(PET, dSOIL, W)) %>%
-    mutate(D = PET - AET)
+           SOIL = get_soil(soil_max, W, PET),
+           dSOIL = get_d_soil(SOIL),
+           AET = get_aet(PET, dSOIL, W),
+           D = PET - AET)
 
 
 find_loc <- function(x) {
