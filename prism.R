@@ -1,4 +1,5 @@
 library(prism)
+library(plotly)
 library(raster)
 library(ggplot2)
 library(tidyverse)
@@ -90,8 +91,10 @@ get_dl <- function (mon, days, Lat) {
 }
 
 get_hl <- function (Lat, slope, aspect_f) {
-    # calculate heat load index multiplier
-    HL <- 0.339 + 0.808 * (cos(Lat) * cos(slope)) - 0.196 * (sin(Lat) * sin(slope)) - 0.482 * (cos(aspect_f) * sin(slope))
+    ## calculate heat load index multiplier
+    Lat.rad <- (pi/180) * Lat
+    slope.rad <- (pi/180) * slope
+    HL <- 0.339 + 0.808 * (cos(Lat.rad) * cos(slope.rad)) - 0.196 * (sin(Lat.rad) * sin(slope.rad)) - 0.482 * (cos(aspect_f) * sin(slope.rad))
     return(HL)
 }
 
@@ -157,8 +160,8 @@ result <- res %>%
            A = abs(180 - abs(aspect - 225)), # folded aspect
            HL = get_hl(Lat, slope, A)) %>%
     mutate(e = 0.611 * exp((17.3 * tmean) / (tmean + 237.3)),
-           ##PET = 29.8 * Days * DL * HL * (e / (tmean + 273.2))) %>%
-           PET = 29.8 * Days * DL * (e / (tmean + 273.2))) %>%
+           PET = 29.8 * Days * DL * HL * (e / (tmean + 273.2))) %>%
+           #PET = 29.8 * Days * DL * (e / (tmean + 273.2))) %>%
     mutate(SOIL = get_soil(soil_max, W, PET)) %>%
     mutate(dSOIL = get_d_soil(SOIL)) %>%
     mutate(AET = get_aet(PET, dSOIL, W)) %>%
@@ -201,3 +204,32 @@ plts <- data_long %>%
 
 ggsave(filename = "bristlecone_aet_cwd_ppt_no-hl.png", plot = plts)
 
+
+cwd_aet_plt <- result %>%
+    group_by(Site) %>%
+    filter(Elev_m != TRUE) %>%
+    summarise(D = sum(D),
+              AET = sum(AET),
+              T = mean(tmean),
+              ppt = sum(ppt),
+              elev = mean(Elev_m)) %>%
+    mutate(loc = fct_relevel(find_loc(Site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+    group_by(loc) %>%
+    arrange(desc(loc)) %>%
+    ggplot() +
+    geom_point(mapping = aes(x = AET, y = D, color = loc)) +
+    scale_color_manual(name = 'Location', values = loc_colors)
+
+summary <- result %>%
+    group_by(Site) %>%
+    filter(Elev_m != TRUE) %>%
+    summarise(D = sum(D),
+              AET = sum(AET),
+              T = mean(tmean),
+              ppt = sum(ppt),
+              elev = mean(as.double(Elev_m), na.rm = TRUE)) %>%
+    mutate(loc = fct_relevel(find_loc(Site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+    group_by(loc)
+
+fig<- plot_ly(summary, x = ~elev, y = ~D, z = ~AET, alpha = 0.75) %>%
+    add_markers(color = ~loc)
