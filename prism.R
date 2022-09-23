@@ -202,7 +202,7 @@ plts <- data_long %>%
     facet_wrap(~ name, ncol = 1, scales = "free") +
     ggtitle("Bio-climatic niche space using PRISM 1991-2020 normals")
 
-ggsave(filename = "bristlecone_aet_cwd_ppt_no-hl.png", plot = plts)
+ggsave(filename = "bristlecone_aet_cwd_ppt.png", plot = plts)
 
 
 cwd_aet_plt <- result %>%
@@ -219,6 +219,8 @@ cwd_aet_plt <- result %>%
     ggplot() +
     geom_point(mapping = aes(x = AET, y = D, color = loc)) +
     scale_color_manual(name = 'Location', values = loc_colors)
+
+ggsave(filename = "bristlecone_aet_x_cwd.png", plot = cwd_aet_plt)
 
 summary <- result %>%
     group_by(Site) %>%
