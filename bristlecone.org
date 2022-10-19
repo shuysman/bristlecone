@@ -1,0 +1,524 @@
+#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:headline
+#+options: author:t broken-links:nil c:nil creator:nil
+#+options: d:(not "LOGBOOK") date:t e:t email:nil f:t inline:t num:t
+#+options: p:nil pri:nil prop:nil stat:t tags:t tasks:t tex:t
+#+options: timestamp:t title:t toc:t todo:t |:t
+#+title: bristlecone
+#+date: <2022-10-18 Tue>
+#+author: steve
+#+email: steve@steve-laptop.home
+#+language: en
+#+select_tags: export
+#+exclude_tags: noexport
+#+creator: Emacs 28.1 (Org mode 9.5.2)
+#+cite_export:
+#+BABEL: :session *R* :cache yes :results output graphics :exports both :tangle yes \n :eval never-export
+
+* Daymet
+Implement water balance model following David Thoma's Simple Water Balance Model and NPS WaterBalance Repo, using Daymet data
+** Libraries and Function Definitions
+#+begin_src R :session
+  library(raster)
+  library(tidyverse)
+  library(WaterBalance)
+  library(lubridate)
+#+end_src
+
+#+RESULTS:
+| lubridate    |
+| raster       |
+| sp           |
+| WaterBalance |
+| forcats      |
+| stringr      |
+| dplyr        |
+| purrr        |
+| readr        |
+| tidyr        |
+| tibble       |
+| ggplot2      |
+| tidyverse    |
+| stats        |
+| graphics     |
+| grDevices    |
+| utils        |
+| datasets     |
+| methods      |
+| base         |
+
+Use Penman PET calculation.  Modified from WaterBalance::ET_PenmanMonteith_daily to work with our data and workflow.  [[https://github.com/CCRP-Adaptation/WaterBalance/blob/6d19806ce5aa6abb6521607fd2da19238dae561d/WaterBalance/R/ET_functions.R#L178][Original version]] had additional arguments for elev and lat, but to facilitate process the df we generate later of all sites we pass lat and elev with each site.
+
+#+begin_src R :results output silent :session
+  ET_PenmanMonteith_daily = function(x, wind=NULL) {
+    ##Inputs
+    tmax <- x$tmax_C
+    tmin <- x$tmin_C
+    elev <- x$elev
+    lat <- x$lat
+    tmean <- (tmax + tmin)/2
+    doy <- as.numeric(strftime(x$Date, "%j"))
+    rh.max <- x$RHmax
+    rh.min <- x$RHmin
+    vp <- x$vp
+    R.s <- x$srad
+    u <- ifelse(is.null(wind) == TRUE, x$wind, wind)
+    psyc.const <- psyc_constant(elev)
+    vap.curve <- vapor_curve(tmean)
+    
+    ##Auxilary calculations for wind terms
+    DT <- vap.curve/(vap.curve + psyc.const*(1+0.34*u))
+    PT <- psyc.const/(vap.curve + (psyc.const*(1+0.34*u)))
+    TT <- (900/(tmean + 273))*u
+
+    ##Saturation vapor pressure
+    e.tmax <- get_svp(tmax)
+    e.tmin <- get_svp(tmin)
+    e.s <- (e.tmax + e.tmin)/2
+
+    ##Actual vapor pressure
+    if(is.null(vp) == TRUE) {
+        if(is.null(rh.max) == TRUE) {
+            e.a <- e.tmin
+        } else {
+            e.a <- actual_vp(rh.max, rh.min)
+        }
+    } else {
+        e.a <- vp
+    }
+
+  #Solar angle and radiation calculations
+  R.ns <- (1 - 0.23)*R.s
+  R.so <- clear_sky_rad(doy, lat, elev)
+  R.nl <- outgoing_rad(tmax, tmin, R.s, e.a, R.so)
+  R.n <- R.ns - R.nl
+  R.ng <- 0.408*R.n
+
+  #ET from radiation
+  ET.rad <- DT*R.ng
+  #ET from wind
+  ET.wind <- PT*TT*(e.s - e.a)
+  #Total ET
+  ET.o <- ET.rad + ET.wind
+  return(ET.o)
+}
+#+end_src
+
+** Data Import and Cleanup
+
+Read sites.csv file, same format used for processing with simple water balance model xlsm
+#+begin_src R :session :results output silent
+  points = read_csv("./sites.csv",
+                  col_names = c("site",
+                                "lat",
+                                "lon",
+                                "slope",
+                                "aspect",
+                                "whc",
+                                "wind",
+                                "shade",
+                                "dro",
+                                "t50",
+                                "hock",
+                                "elev",
+                                "mt_range",
+                                "owner"),
+                  col_types = c("c", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "d", "c", "c"),
+                  col_select = c("site":"owner"),
+                  skip = 1
+                  )
+  
+#+end_src
+
+
+ Load downloaded daymet data.  Can be batch downloaded using sites.csv file using extract_daymet_batch.py script.  File names (1.csv, 2.csv, ... 512.csv) need to match filenames in sites.csv file.
+#+begin_src R :session :results output silent
+  alldaymetdata <- list()
+  for (i in 1:length(points$site)) {
+      daymetdata <- read_csv(file = paste("./daymet/", points$site[i], sep=""), skip = 8,
+                             col_names = c("year", "yday", "dayl", "prcp", "srad", "swe", "tmax_C", "tmin_C", "vp"),
+                             col_types = c("i", "i", "d", "d", "d", "d", "d", "d", "d"))
+      site <- data.frame("site") ## Add on site ids (string equalling filename 1.csv, 2.csv etc) to use as index, not efficient, but easy
+      site <- rbind(c(points$site[i]))
+      alldaymetdata[[i]] <- cbind(site, daymetdata)
+  }
+  alldaymetdata <- as_tibble(do.call(rbind, alldaymetdata))
+#+end_src
+
+** Calculate Water Balance parameters
+#+begin_src R :session :results output none
+  wbdata <- alldaymetdata %>%
+    left_join(points, by = "site") %>%
+    mutate(wind = NULL,
+           vp = vp/1000, #convert to kPa
+           srad = srad * 60 * 60 * 24 / 1000000, # convert to MJ m-2 day-1
+           tmean_C = (tmax_C + tmin_C) / 2,
+           Date = as.Date(yday, origin = paste(as.numeric(year) - 1, "-12-31", sep="")),
+           Month = month(Date),
+           daylength = get_daylength(Date, lat),
+           jtemp = get_jtemp(lon, lat),
+           F = get_freeze(jtemp, tmean_C),
+           RAIN = get_rain(prcp, F),
+           SNOW = get_snow(prcp, F),
+           MELT = get_melt(tmean_C, jtemp, hock = 4, SNOW),
+           PACK = get_snowpack(jtemp, SNOW, MELT),
+           W = MELT + RAIN)
+
+  wbdata$ET_Hamon_daily <- ET_Hamon_daily(wbdata)
+  wbdata$ET_Penman_daily <- ET_PenmanMonteith_daily(wbdata, wind = 1) # Need to use our version here which masks WaterBalance::ET_PenmanMonteith_daily()
+
+  wbdata_penman <- wbdata %>%
+    group_by(site, year) %>%
+    mutate(PET = modify_PET(ET_Penman_daily, slope, aspect, lat, F, shade.coeff = 1),
+           W_PET = W - PET,
+           SOIL = get_soil(W, mean(whc), PET, W_PET, whc),
+           DSOIL = diff(c(mean(whc), SOIL)),
+           AET = get_AET(W, PET, SOIL, whc),
+           W_ET_DSOIL = W - AET - DSOIL,
+           D = PET - AET,
+           GDD = get_GDD(tmean_C, 0))
+
+  wbdata_hamon <- wbdata %>%
+    group_by(site, year) %>%
+    mutate(PET = modify_PET(ET_Hamon_daily, slope, aspect, lat, F, shade.coeff = 1),
+           W_PET = W - PET,
+           SOIL = get_soil(W, mean(whc), PET, W_PET, whc),
+           DSOIL = diff(c(mean(whc), SOIL)),
+           AET = get_AET(W, PET, SOIL, whc),
+           W_ET_DSOIL = W - AET - DSOIL,
+           D = PET - AET,
+           GDD = get_GDD(tmean_C, 0))
+
+#+end_src
+
+Summary table calculations (penman)
+#+begin_src R :session :results output none
+  summary_tbl_by_month_penman <- wbdata_penman %>%
+    group_by(site, year, Month) %>%
+    summarise(lat = lat, lon = lon, ppt = sum(prcp), T = mean(tmean_C), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
+
+  summary_tbl_by_year_penman <- summary_tbl_by_month_penman %>%
+    group_by(site, year) %>%
+    summarise(lat = lat, lon = lon, ppt = sum(ppt), T = mean(T), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
+
+  summary_91_20_penman <- summary_tbl_by_year_penman  %>%
+    filter(year >= 1991, year <= 2020) %>%
+    group_by(site) %>%
+    summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD), PET = mean(PET))
+
+  summary_tbl_all_penman <- summary_tbl_by_year_penman %>%
+    group_by(site) %>%
+    summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD))
+#+end_src
+
+Summary table calculations (hamon)
+#+begin_src R :session :results output none
+  summary_tbl_by_month_hamon <- wbdata_hamon %>%
+    group_by(site, year, Month) %>%
+    summarise(lat = lat, lon = lon, ppt = sum(prcp), T = mean(tmean_C), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
+
+  summary_tbl_by_year_hamon <- summary_tbl_by_month_hamon %>%
+    group_by(site, year) %>%
+    summarise(lat = lat, lon = lon, ppt = sum(ppt), T = mean(T), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
+
+  summary_91_20_hamon <- summary_tbl_by_year_hamon  %>%
+    filter(year >= 1991, year <= 2020) %>%
+    group_by(site) %>%
+    summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD), PET = mean(PET))
+
+  summary_tbl_all_hamon <- summary_tbl_by_year_hamon %>%
+    group_by(site) %>%
+    summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD))
+#+end_src
+** Figures
+*** Helper Functions
+#+begin_src R :session :results output none
+  find_loc <- function(x) {
+    #' Lookup site.csv in locations to determine if in region of interest
+    panamint_site_ids <- paste(as.character(seq(219, 243)), ".csv", sep="")
+    wah_wah_site_ids <- c("497.csv") #paste(as.character(seq(497, 498)), ".csv", sep="")
+    silver_peak_site_ids <- paste(as.character(seq(358, 361)), ".csv", sep="")
+    rawhide_site_ids <- paste(as.character(seq(154, 165)), ".csv", sep="")
+    case_when(x %in% panamint_site_ids ~ "panamint",
+              x %in% wah_wah_site_ids ~ "wah_wah",
+              x %in% silver_peak_site_ids ~ "silver_peak",
+              x %in% rawhide_site_ids ~ "rawhide",
+              TRUE ~ "other")
+  }
+
+  loc_colors <- c("red", "green", "aquamarine", "darkorchid1", "black")
+#+end_src
+*** AET x CWD
+
+**** Penman
+#+begin_src R :session :file 1.png :results graphics file
+  summary_tbl_all_penman %>%
+    mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+    ggplot() +
+    geom_point(mapping = aes(x = D, y = AET, col = loc)) +
+    scale_color_manual(name = 'Location', values = loc_colors) +
+    ggtitle("AET x CWD Penman Daymet")
+#+end_src
+
+#+RESULTS:
+[[file:1.png]]
+
+
+**** Hamon
+#+begin_src R :session :file 2.png :results graphics file
+  summary_tbl_all_hamon %>%
+     mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+     ggplot() +
+     geom_point(mapping = aes(x = D, y = AET, col = loc)) +
+     scale_color_manual(name = 'Location', values = loc_colors) +
+     ggtitle("AET x CWD Hamon Daymet")
+#+end_src
+
+#+RESULTS:
+[[file:2.png]]
+
+* PRISM
+Implement water balance model following Lutz 2010 using PRISM data, following Bentz paper
+** Libraries
+#+begin_src R :session *R2*
+  library(prism)
+  library(plotly)
+  library(raster)
+  library(ggplot2)
+  library(tidyverse)
+  library(lubridate)
+#+end_src
+
+#+RESULTS:
+| lubridate |
+| forcats   |
+| stringr   |
+| dplyr     |
+| purrr     |
+| readr     |
+| tidyr     |
+| tibble    |
+| tidyverse |
+| raster    |
+| sp        |
+| plotly    |
+| ggplot2   |
+| prism     |
+| stats     |
+| graphics  |
+| grDevices |
+| utils     |
+| datasets  |
+| methods   |
+| base      |
+
+Be sure to set the download folder using `prism_set_dl_dir()`.
+#+begin_src R :session *R2* :results output none
+  prism_set_dl_dir("~/prismtmp")
+#+end_src
+** Water Balance Functions
+
+#+begin_src R :session *R2* :results output none
+  get_f <- function (tmean) {
+    f <- case_when(
+      tmean <= 0 ~ 0,
+      tmean > 0 & tmean < 6 ~ 0.167 * tmean,
+      tmean >= 6 ~ 1)
+    return(f)
+  }
+
+  get_rain <- function (ppt, F) {
+    return(F * ppt)
+  }
+
+  get_snow <- function (ppt, F) {
+    return( (1 - F) * ppt )
+  }
+
+  get_pack <- function (ppt, F, sp.0=NULL) {
+    snowpack <- vector()
+    sp.0 <- ifelse(!is.null(sp.0), sp.0, 0)
+    for (i in 1:length(ppt)) {
+      if (i == 1) {
+        snowpack[i] = (1 - F[i])**2 * ppt[i] + (1 - F[i]) * sp.0
+      } else {
+        snowpack[i] = (1 - F[i])**2 * ppt[i] + (1 - F[i]) * snowpack[i - 1]
+      }
+    }
+    return(snowpack)
+  }
+
+  get_melt <- function (snow, pack, F, sp.0=NULL) {
+    sp.0 <- ifelse(!is.null(sp.0), sp.0, 0)
+    melt <- vector()
+    for (i in 1:length(snow)) {
+      if ( i == 1 ) {
+        melt[i] = F[i] * (snow[i] + sp.0)
+      } else {
+        melt[i] = F[i] * (snow[i] + pack[i-1])
+      }
+    }
+    return(melt)
+  }
+
+  get_dl <- function (mon, days, Lat) {
+    ## Get Daylength for all days in vector of months
+    date <- paste("1980-", mon, "-", days, sep = "")
+    yd <- yday(date)
+    theta <- 0.2163108+2*atan(0.9671396*tan(0.00860*(yd-186)))
+    P <- asin(0.39795 * cos(theta))
+    dl <- 24 - (24/pi) * acos((sin((0.8333 * pi)/180) + sin((Lat * pi) / 180) * sin(P))/(cos((Lat*pi)/180)*cos(P)))
+    return(dl)
+  }
+
+  get_hl <- function (Lat, slope, aspect_f) {
+    ## calculate heat load index multiplier
+    Lat.rad <- (pi/180) * Lat
+    slope.rad <- (pi/180) * slope
+    HL <- 0.339 + 0.808 * (cos(Lat.rad) * cos(slope.rad)) - 0.196 * (sin(Lat.rad) * sin(slope.rad)) - 0.482 * (cos(aspect_f) * sin(slope.rad))
+    return(HL)
+  }
+
+  get_soil <- function (soil_max, w, pet, s.0=NULL) {
+    s.0 = ifelse(!is.null(s.0), s.0, 0)
+    soil <- vector()
+    for (i in 1:length(pet)) {
+      if ( i == 1 ) {
+        soil[i] = pmin(soil_max[i],
+                       if (w[i] > pet[i]) {
+                         (w[i] - pet[i]) + s.0
+                       } else {
+                         s.0 * (1 - exp(-(pet[i]-w[i])/soil_max[i]))
+                       })
+      } else {
+        soil[i] = pmin(soil_max[i],
+                       if (w[i] > pet[i]) {
+                         (w[i] - pet[i]) + soil[i-1]
+                       } else {
+                         soil[i-1] * (1 - exp(-(pet[i]-w[i])/soil_max[i]))
+                       })
+      }
+    }
+    return(soil)
+  }
+
+  get_d_soil <- function (soil, s.0=NULL) {
+    s.0 = ifelse(!is.null(s.0), s.0, 0)
+    d_soil = soil - lag(soil, default = s.0)
+    return(d_soil)
+  }
+
+  get_aet <- function (pet, d_soil, w) {
+    aet <- vector()
+    for (i in 1:length(pet)) {
+      a <- min(pet[i], d_soil[i] + w[i])
+      aet[i] = if_else(a > 0,
+                       a,
+                       0)
+    }
+    return(aet)
+  }
+
+#+end_src
+** Download PRISM Normals
+Only needs to be ran once after data is saved to prism dl dir
+#+begin_src R :session *R2* :results output none
+  get_prism_normals("ppt", "800m", annual = TRUE, keepZip = FALSE)
+  get_prism_normals("ppt", "800m", mon = 1:12, keepZip = FALSE)
+  get_prism_normals("tmean", "800m", annual = TRUE, keepZip = FALSE)
+  get_prism_normals("tmean", "800m", mon = 1:12, keepZip = FALSE)
+#+end_src
+
+** Data Import and Cleanup
+#+begin_src R :session *R2* :results output none
+  points <- read_csv("./sites.csv")
+  points.spdf <- SpatialPointsDataFrame(coords = points[,c('Lon', 'Lat')],
+                                        data = points, proj4string = CRS("+proj=longlat +ellps=WGS84 +no_defs"))
+
+  res <- data.frame()
+  for (i in 1:12) {
+    ppt_pd <- prism_archive_subset("ppt", "monthly normals", resolution = "800m", mon = i)
+    ppt_pd <- pd_to_file(ppt_pd)
+    ppt_pd_rast <- raster(ppt_pd)
+    ppt <- raster::extract(ppt_pd_rast, points.spdf, fun=mean, na.rm=TRUE, sp=FALSE)
+    tmean_pd <- prism_archive_subset("tmean", "monthly normals", resolution = "800m", mon = i)
+    tmean_pd <- pd_to_file(tmean_pd)
+    tmean_pd_rast <- raster(tmean_pd)
+    tmean <- raster::extract(tmean_pd_rast, points.spdf, fun=mean, na.rm=TRUE, sp=FALSE)
+    df <- data.frame(Site = points$Site, Lat = points$Lat, Lon = points$Lon, mon = i, ppt = ppt, tmean = tmean)
+    res <- rbind(res, df)
+  }
+#+end_src
+
+** Water Balance Calculations
+#+begin_src R :session *R2* :results output none
+  result <- res %>%
+    left_join(points, by = c("Site" = "Site")) %>%
+    mutate(Lat = Lat.x,
+           Lon = Lon.x) %>%
+    group_by(Site) %>%
+    arrange(mon) %>%    
+    # defaults
+    mutate(slope = SLOPE_QGIS,
+           aspect = ASPECT_QGIS,
+           soil_max = 100,
+           hock = 4) %>%    
+    mutate(F = get_f(tmean),
+           RAIN = get_rain(ppt, F),
+           SNOW = get_snow(ppt, F),
+           PACK = get_pack(ppt, F),
+           MELT = get_melt(SNOW, PACK, F), 
+           W = RAIN + MELT,
+           Days = days_in_month(mon),
+           DL = get_dl(mon, Days, Lat),
+           A = abs(180 - abs(aspect - 225)), # folded aspect
+           HL = get_hl(Lat, slope, A),
+           e = 0.611 * exp((17.3 * tmean) / (tmean + 237.3)),
+           PET = 29.8 * Days * DL * HL * (e / (tmean + 273.2)),
+           #PET = 29.8 * Days * DL * (e / (tmean + 273.2))) %>%
+           SOIL = get_soil(soil_max, W, PET),
+           dSOIL = get_d_soil(SOIL),
+           AET = get_aet(PET, dSOIL, W),
+           D = PET - AET)
+#+end_src
+
+** Figures
+
+*** Helper Functions
+#+begin_src R :session *R2* :results output none
+  find_loc <- function(x) {
+    #' Lookup site.csv in locations to determine if in region of interest
+    panamint_site_ids <- paste(as.character(seq(219, 243)), ".csv", sep="")
+    wah_wah_site_ids <- c("497.csv") #paste(as.character(seq(497, 498)), ".csv", sep="")
+    silver_peak_site_ids <- paste(as.character(seq(358, 361)), ".csv", sep="")
+    rawhide_site_ids <- paste(as.character(seq(154, 165)), ".csv", sep="")
+    case_when(x %in% panamint_site_ids ~ "panamint",
+              x %in% wah_wah_site_ids ~ "wah_wah",
+              x %in% silver_peak_site_ids ~ "silver_peak",
+              x %in% rawhide_site_ids ~ "rawhide",
+              TRUE ~ "other")
+  }
+
+  loc_colors <- c("red", "green", "aquamarine", "darkorchid1", "black")
+#+end_src
+
+*** AET x CWD
+#+begin_src R :session *R2* :file 3.png :results output graphics file
+  result %>%
+    group_by(Site) %>%
+    filter(Elev_m != TRUE) %>%
+    summarise(D = sum(D),
+              AET = sum(AET),
+              T = mean(tmean),
+              ppt = sum(ppt),
+              elev = mean(Elev_m)) %>%
+    mutate(loc = fct_relevel(find_loc(Site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+    group_by(loc) %>%
+    arrange(desc(loc)) %>%
+    ggplot() +
+    geom_point(mapping = aes(x = D, y = AET, color = loc)) +
+    scale_color_manual(name = 'Location', values = loc_colors)
+#+end_src
+
+#+RESULTS:
+[[file:3.png]]
+
