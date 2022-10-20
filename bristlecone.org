@@ -16,9 +16,209 @@
 #+BABEL: :session *R* :cache yes :results output graphics :exports both :tangle yes \n :eval never-export
 
 * Introduction
-This project extends the climate analysis conducted on the PILO mortality cite documented by [cite:@bentzGreatBasinBristlecone2022].  We attempt to recreate their analysis [[*Lutz et al. 2010 Water Balance Method][here]], as well as run an additional analysis following David Thoma's simple water balance model which uses daily Daymet timeseries and incorporates additional physical site parameters and therefore may provided a more advanced analysis of the site.
+This project extends the climate analysis conducted on the PILO mortality cite documented by [cite:@bentzGreatBasinBristlecone2022].  We attempt to recreate their analysis [[*Lutz et al. 2010 Water Balance Method][here]], as well as run an additional analysis following David Thoma's simple water balance model which uses daily Daymet timeseries and incorporates additional physical site parameters and therefore may provided a more advanced, and hopefully accurate, analysis of the site.
 
-* Simple Water Balance Model
+Our aim is to examine the mortality event occuring at Panamint Range (Telescope Peak), which was attributed to Mountain Pine Beetle [cite:@bentzGreatBasinBristlecone2022].  Mortality events also occured at Wah Wah Mountains (Pinyon Ips), Silver Peak (unattributed) , and Hot Creek Range/Rawhide (unattributed).
+
+Three analyses were performed:
+1. [[*Simple Water Balance Model (Excel)][Simple Water Balance Model (Excel)]]
+   ~shareable_Excel_xlsm_water_balance_model_v3.xlsm~
+   Simple Water Balance model implemented in Excel provided by David Toma
+2. [[*Simple Water Balance Model (R)][Simple Water Balance model (R)]]
+   Simple Water Balance Model implemented in R making use of [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]] project
+3. [[*Lutz et al. 2010 Water Balance Method][Lutz et al. 2010 Water Balance Method]]
+   Lutz 2010 Water Balance Model implemented in R following methods in [cite:@bentzGreatBasinBristlecone2022], which followed [cite:@lutzClimaticWaterDeficit2010]
+
+* Data
+
+** DEM
+SRTM 30m DEM used to generate slope, aspect, elevation in QGIS 3.10. Some elevations were provided in the Bentz data set, existing values were used instead of generated ones when available. 
+
+** Soil
+SSURGO database
+
+** t50
+~merged_jennings.tif~
+
+* Simple Water Balance Model (Excel)
+Data from David Thoma's Simple Water Balance model xlsm, processed using provided batch script.  Daymet data obtained using extract_daymet_batch.py script.  PET Values calculated with Penman method
+** Libraries
+#+begin_src R :session *R3* :eval never-export
+  library(tidyverse)
+  library(ggplot2)
+  library(readxl)
+  library(here)
+  library(gghighlight)
+  library(ggpubr)
+  library(metR)
+#+end_src
+
+#+RESULTS:
+| metR        |
+| ggpubr      |
+| gghighlight |
+| here        |
+| readxl      |
+| forcats     |
+| stringr     |
+| dplyr       |
+| purrr       |
+| readr       |
+| tidyr       |
+| tibble      |
+| ggplot2     |
+| tidyverse   |
+| stats       |
+| graphics    |
+| grDevices   |
+| utils       |
+| datasets    |
+| methods     |
+| base        |
+
+** Data Import and Cleanup
+#+begin_src R :session *R3* :eval never-export :results output none
+  setwd("annual")
+  tbl <-
+      list.files(pattern = "*.csv") %>%
+      map_df(~read_csv(., n_max = 41, col_types = cols())) %>% # only read 41 rows (For annual reports) because csvs contain nonsynctactic row of averages at bottom, which creates NAs in df
+      mutate(year = strtoi(`Row Labels`)) %>%
+      group_by(site)
+
+  setwd(here())
+  sites_tbl <- read_excel("sites.xlsx")
+
+  mt_list <- c("PANAMINT RANGE",
+               "WAH WAH MOUNTAINS",
+               "SILVER PEAK RANGE",
+               "HOT CREEK RANGE")
+#+end_src
+
+** Summary Table
+#+begin_src R :session *R3* :eval never-export :results output none
+  summary_tbl <- tbl %>%
+    summarise(
+      mean_t = mean(`Average of T`),
+      mean_P = mean(`Sum of P`),
+      mean_AET= mean(`Sum of AET`),
+      mean_D= mean(`Sum of D`),
+      mean_GDD= mean(`Sum of GDD`),
+      mean_SOIL= mean(`Average of SOIL`),
+      ###
+      mean_t_pre_2010 = mean(`Average of T`[year <= 2010]),
+      mean_P_pre_2010 = mean(`Sum of P`[year <= 2010]),
+      mean_AET_pre_2010 = mean(`Sum of AET`[year <= 2010]),
+      mean_D_pre_2010 = mean(`Sum of D`[year <= 2010]),
+      mean_GDD_pre_2010 = mean(`Sum of GDD`[year <= 2010]),
+      mean_SOIL_pre_2010 = mean(`Average of SOIL`[year <= 2010]),
+      ###
+      mean_t_post_2010 = mean(`Average of T`[year > 2010]),
+      mean_P_post_2010 = mean(`Sum of P`[year > 2010]),
+      mean_AET_post_2010 = mean(`Sum of AET`[year > 2010]),
+      mean_D_post_2010 = mean(`Sum of D`[year > 2010]),
+      mean_GDD_post_2010 = mean(`Sum of GDD`[year > 2010]),
+      mean_SOIL_post_2010 = mean(`Average of SOIL`[year > 2010]),
+      ###    Delta values pre and post 2010
+      dt = mean_t_post_2010 - mean_t_pre_2010,
+      dP = mean_P_post_2010 - mean_P_pre_2010,
+      dAET = mean_AET_post_2010 - mean_AET_pre_2010,
+      dD = mean_D_post_2010 - mean_D_pre_2010,
+      dGDD = mean_GDD_post_2010 - mean_GDD_pre_2010,
+      dSOIL = mean_SOIL_post_2010 - mean_SOIL_pre_2010,
+      ) %>%
+    left_join(sites_tbl, by = c("site" = "Site")) %>%
+    group_by(MT_range)
+#+end_src
+
+** AET x CWD
+#+begin_src R  :session *R3* :eval never-export :results output graphics file :file aed_cwd_excel.png :exports both
+    summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_D, y = mean_AET, col = MT_range)) +
+    gghighlight(MT_range %in% mt_list,
+                use_direct_label = FALSE) +
+    ggtitle("AET x CWD Penman Daymet Excel")
+#+end_src
+
+#+RESULTS:
+[[file:aed_cwd_excel.png]]
+
+** Pre 2010 Plot
+#+begin_src R :session *R3* :eval never-export :file pre_2010.png :results output graphics file :exports both
+  cwd_plt_pre_2010 <- summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_t_pre_2010, y = mean_D_pre_2010, color = MT_range)) +
+    gghighlight(MT_range %in% mt_list,
+                  use_direct_label = FALSE) +
+    labs(x = "Mean Annual T (1980-2010)", y = "CWD")
+
+  p_plt_pre_2010 <- summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_t_pre_2010, y = mean_P_pre_2010, color = MT_range)) +
+    labs(x = "Mean Annual T (1980-2010)", y = "PPT") +
+    gghighlight(MT_range %in% mt_list,
+                use_direct_label = FALSE)
+
+  aet_plt_pre_2010 <- summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_t_pre_2010, y = mean_AET_pre_2010, color = MT_range)) +
+    labs(x = "Mean Annual T", y = "AET") +
+    gghighlight(MT_range %in% mt_list,
+                use_direct_label = FALSE)
+
+  ggarrange(cwd_plt_pre_2010, p_plt_pre_2010, aet_plt_pre_2010,
+            common.legend = TRUE) %>%
+    annotate_figure(top = text_grob("Climate Space 1980-2010 Penman Daymet Excel"))
+#+end_src
+
+#+RESULTS:
+[[file:pre_2010.png]]
+
+** Post 2010 Plot
+#+begin_src R :session *R3* :eval never-export :file post_2010.png :results output graphics file :exports both
+  cwd_plt_post_2010 <- summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_t_post_2010, y = mean_D_post_2010, color = MT_range)) +
+    gghighlight(MT_range %in% mt_list,
+                  use_direct_label = FALSE) +
+    labs(x = "Mean Annual T (2011-2020)", y = "CWD")
+
+  p_plt_post_2010 <- summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_t_post_2010, y = mean_P_post_2010, color = MT_range)) +
+    labs(x = "Mean Annual T (2011-2020)", y = "PPT") +
+    gghighlight(MT_range %in% mt_list,
+                use_direct_label = FALSE)
+
+  aet_plt_post_2010 <- summary_tbl %>%
+    ggplot() +
+    geom_point(mapping = aes(x = mean_t_post_2010, y = mean_AET_post_2010, color = MT_range)) +
+    labs(x = "Mean Annual T (2011-2020)", y = "AET") +
+    gghighlight(MT_range %in% mt_list,
+                use_direct_label = FALSE)
+
+  ggarrange(cwd_plt_post_2010, p_plt_post_2010, aet_plt_post_2010,
+                               common.legend = TRUE) %>%
+    annotate_figure(top = text_grob("Climate Space 2011-2020 Penman Daymet Excel"))
+#+end_src
+
+#+RESULTS:
+[[file:post_2010.png]]
+
+** Change Plot
+#+begin_src R :session *R3* :eval never-export :file aed_cwd_change.png :results output graphics file :exports bothp
+  summary_tbl %>%
+    ggplot(aes(x = mean_D_pre_2010, y = mean_AET_pre_2010, color = MT_range)) +
+    geom_arrow(aes(dx = dD, dy = dAET)) +
+    gghighlight(MT_range %in% mt_list, use_direct_label = FALSE) +
+    labs(title = "Change in mean AET and CWD over periods from 2010-2021 and 1980-2010 Penman Daymet Excel", x = "CWD (mm)", y = "AET (mm)") +
+    scale_mag() 
+#+end_src
+
+#+RESULTS:
+[[file:aed_cwd_change.png]]
+
+* Simple Water Balance Model (R)
 ** Daymet
 Implement water balance model following David Thoma's Simple Water Balance Model and [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]], using Daymet data
 *** Libraries and Function Definitions
@@ -289,7 +489,7 @@ Summary table calculations (Hamon)
 **** Time Series
 ***** AET
 ****** Hamon
-#+begin_src R :session :file aet_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+#+begin_src R :session :file aet_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
     left_join(points, by = "site") %>%
@@ -310,7 +510,7 @@ Summary table calculations (Hamon)
 ****** TODO Penman
 ***** CWD
 ****** Hamon
-#+begin_src R :session :file cwd_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+#+begin_src R :session :file cwd_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
     left_join(points, by = "site") %>%
@@ -331,7 +531,7 @@ Summary table calculations (Hamon)
 ****** TODO Penman
 ***** PPT
 ****** Hamon
-#+begin_src R :session :file ppt_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+#+begin_src R :session :file ppt_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
     left_join(points, by = "site") %>%
@@ -352,7 +552,7 @@ Summary table calculations (Hamon)
 ****** TODO Penman
 ***** T
 ****** Hamon
-#+begin_src R :session :file t_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+#+begin_src R :session :file t_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
     left_join(points, by = "site") %>%
@@ -638,9 +838,7 @@ Only needs to be run once after which data is saved to prism dl dir
 
 * Discussion
 ** Issues
-Penman PET calculation returns extreme values for CWD and AET.  The CWD values generated would be expected from a desert rather than montane forest.  This occurs with both our version as well as the version from WaterBalance.  ~WaterBalance::ET_Hamon_daily~ however appears to return correct results.  
-
-Since the patterns (but not absolute values) for the analysis of Daymet climate data using Hamon and Penman calculations appears similar, but the Hamon values are in line with the PRISM analysis, we will move forward with the Hamon calculations for analysis here.
+Penman PET calculation returns extreme values for CWD and AET.  This occurs in both analyses above implementing the Simple Water Balance model in R and Excel.  The CWD values generated would be expected from a desert rather than montane forest.  This occurs with both our version as well as the version from WaterBalance.  ~WaterBalance::ET_Hamon_daily~ however appears to return correct results.  The patterns remain consistent between Hamon and Penman analyses, but absolute values vary.
 
 (Possible) Reasons for differences between models:
 - Additional Variables accounted for in Simple Water Balance Model that are missing from Lutz 2010 method
