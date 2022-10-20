@@ -14,13 +14,14 @@
 #+BIBLIOGRAPHY:bristlecone.bib
 #+cite_export: csl
 #+BABEL: :session *R* :cache yes :results output graphics :exports both :tangle yes \n :eval never-export
+#+EXPORT_FILE_NAME: exports/index.html
 
 * Introduction
 This project extends the climate analysis conducted on the PILO mortality cite documented by [cite:@bentzGreatBasinBristlecone2022].  We attempt to recreate their analysis [[*Lutz et al. 2010 Water Balance Method][here]], as well as run an additional analysis following David Thoma's simple water balance model which uses daily Daymet timeseries and incorporates additional physical site parameters and therefore may provided a more advanced analysis of the site.
 
 * Simple Water Balance Model
 ** Daymet
-Implement water balance model following David Thoma's Simple Water Balance Model and NPS WaterBalance Repo, using Daymet data
+Implement water balance model following David Thoma's Simple Water Balance Model and [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]], using Daymet data
 *** Libraries and Function Definitions
 #+begin_src R :session :eval never-export
   library(raster)
@@ -191,11 +192,13 @@ Read sites.csv file, same format used for processing with simple water balance m
            AET = get_AET(W, PET, SOIL, whc),
            W_ET_DSOIL = W - AET - DSOIL,
            D = PET - AET,
-           GDD = get_GDD(tmean_C, 0))
+           GDD = get_GDD(tmean_C, 0)) 
 
 #+end_src
 
-Summary table calculations (penman)
+
+
+Summary table calculations (Penman)
 #+begin_src R :session :results output none :eval never-export
   summary_tbl_by_month_penman <- wbdata_penman %>%
     group_by(site, year, Month) %>%
@@ -205,17 +208,12 @@ Summary table calculations (penman)
     group_by(site, year) %>%
     summarise(lat = lat, lon = lon, ppt = sum(ppt), T = mean(T), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
 
-  summary_91_20_penman <- summary_tbl_by_year_penman  %>%
-    filter(year >= 1991, year <= 2020) %>%
-    group_by(site) %>%
-    summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD), PET = mean(PET))
-
   summary_tbl_all_penman <- summary_tbl_by_year_penman %>%
     group_by(site) %>%
     summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD))
 #+end_src
 
-Summary table calculations (hamon)
+Summary table calculations (Hamon)
 #+begin_src R :session :results output none :eval never-export
   summary_tbl_by_month_hamon <- wbdata_hamon %>%
     group_by(site, year, Month) %>%
@@ -224,11 +222,6 @@ Summary table calculations (hamon)
   summary_tbl_by_year_hamon <- summary_tbl_by_month_hamon %>%
     group_by(site, year) %>%
     summarise(lat = lat, lon = lon, ppt = sum(ppt), T = mean(T), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
-
-  summary_91_20_hamon <- summary_tbl_by_year_hamon  %>%
-    filter(year >= 1991, year <= 2020) %>%
-    group_by(site) %>%
-    summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD), PET = mean(PET))
 
   summary_tbl_all_hamon <- summary_tbl_by_year_hamon %>%
     group_by(site) %>%
@@ -252,10 +245,12 @@ Summary table calculations (hamon)
 
   loc_colors <- c("red", "green", "aquamarine", "darkorchid1", "black")
 #+end_src
+
 **** AET x CWD
 
+
 ***** Penman
-#+begin_src R :session :file 1.png :results graphics file :eval never-export :exports both
+#+begin_src R :session :file aet_cwd_penman_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_penman %>%
     mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
     ggplot() +
@@ -265,11 +260,11 @@ Summary table calculations (hamon)
 #+end_src
 
 #+RESULTS:
-[[file:1.png]]
+[[file:aet_cwd_penman_daymet_swb.png]]
 
 
 ***** Hamon
-#+begin_src R :session :file 2.png :results graphics file :eval never-export :exports both
+#+begin_src R :session :file aet_cwd_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_hamon %>%
      mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
      ggplot() +
@@ -281,9 +276,32 @@ Summary table calculations (hamon)
 #+RESULTS:
 [[file:2.png]]
 
+**** Time Series
+***** AET
+****** TODO Hamon
+#+begin_src R :session :file all_variables_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
+  summary_tbl_by_year_hamon %>%
+    mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+    ggplot() +
+    geom_line(mapping = aes(x = year, y = AET), color = loc) +
+    scale_color_manual(name = 'Location', values = loc_colors)
+#+end_src
+****** TODO Penman
+***** CWD
+****** TODO Hamon
+****** TODO Penman
+***** PPT
+****** TODO Hamon
+****** TODO Penman
+***** T
+****** TODO Hamon
+****** TODO Penman
+*** TODO Jennings Coef
+Mike thought jtemp could cause significant differences in these calculations, causing the differences between the models.  Could cause funky calculations in snowpack.  
+
 * Lutz et al. 2010 Water Balance Method
 ** PRISM
-Implement water balance model following Lutz 2010 using PRISM data, following Bentz paper
+Following [cite:@bentzGreatBasinBristlecone2022], Implement water balance model as in [cite:@lutzClimaticWaterDeficit2010] and supplemental.  Use 800m PRISM 30 yr normals.
 *** Libraries
 #+begin_src R :session *R2* :eval never-export
   library(prism)
@@ -322,7 +340,7 @@ Be sure to set the download folder using ~prism_set_dl_dir()~.
   prism_set_dl_dir("~/prismtmp")
 #+end_src
 *** Water Balance Functions
-
+Implement water balance functions from [cite:@lutzClimaticWaterDeficit2010] supplemental
 #+begin_src R :session *R2* :results output none :eval never-export
   get_f <- function (tmean) {
     f <- case_when(
@@ -426,8 +444,8 @@ Be sure to set the download folder using ~prism_set_dl_dir()~.
 
 #+end_src
 *** Download PRISM Normals
-Only needs to be ran once after data is saved to prism dl dir
-#+begin_src R :session *R2* :results output none :eval never-export
+Only needs to be run once after which data is saved to prism dl dir
+#+begin_src R :session *R2* :results output none :eval never never-export
   get_prism_normals("ppt", "800m", annual = TRUE, keepZip = FALSE)
   get_prism_normals("ppt", "800m", mon = 1:12, keepZip = FALSE)
   get_prism_normals("tmean", "800m", annual = TRUE, keepZip = FALSE)
@@ -528,15 +546,18 @@ Only needs to be ran once after data is saved to prism dl dir
 #+RESULTS:
 [[file:3.png]]
 
+* *Hypotheses*
+1. Low AET values -> carbon starvation -> increased susceptibility to MPB
+2. High treeline temperature growth release.  High temps -> accelerated growth rates in T-limited systems -> decreased wood density (?) -> increased susceptibility to MPB
+   - High temperature release reported in PILO in White Mountains by [cite:@salzerRecentUnprecedentedTreering2009]
+3. Beetle Hypothesis: Exploding beetle populations, enhanced by climate change, are overwhelming usual food source, PIFL.  The beetles are forced to seek out novel food sources (i.e., PILO, which has previously been shown to be resistant to MPB [cite:@bentzDefenseTraitsLong2017]).  Beetle feeding could occur at low, undetected levels in PILO and not cause apparent harm, might be now passing threshold that can kill trees.
+
+
 * Discussion
 ** Issues
 Penman PET calculation returns extreme values for CWD and AET.  The CWD values generated would be expected from a desert rather than montane forest.  This occurs with both our version as well as the version from WaterBalance.  ~WaterBalance::ET_Hamon_daily~ however appears to return correct results.  
 
 Since the patterns (but not absolute values) for the analysis of Daymet climate data using Hamon and Penman calculations appears similar, but the Hamon values are in line with the PRISM analysis, we will move forward with the Hamon calculations for analysis here.
-** Conclusions
-[cite:@bentzGreatBasinBristlecone2022] determined that the PILO mortality event on Telescope Peak occured at a location that is middle of the road in the PILO climate space.  Their climatic analysis used PRISM 30 year normals and the Hamon method to determine PET, following [cite:@lutzClimaticWaterDeficit2010].  While their code and thus exact method was not provided, we were able to approximately recreate their analysis above, receiving similar results.
-
-Our analysis using the Simple Water Balance model method with Hamon PET calculations placed the Telescope Peak sites in a different climatic space than reported by [cite:@bentzGreatBasinBristlecone2022].  We found that the Telescope Peak sites had extremely low AET (89.2 - 107 mean for all years, mean for all sites for all years = 206), while CWD values were around the average for all sites.   
 
 (Possible) Reasons for differences between models:
 - Additional Variables accounted for in Simple Water Balance Model that are missing from Lutz 2010 method
@@ -545,10 +566,10 @@ Our analysis using the Simple Water Balance model method with Hamon PET calculat
   3. srad - not used in ~WaterBalance:ET_Hamon_daily~
 - Calculations from daily time series (SWB) instead of 30 yr monthly normals (Lutz)
 
-*Hypotheses*
-1. Low AET values -> carbon starvation -> increased susceptibility to MPB
-2. High treeline temperature growth release.  High temps -> accelerated growth rates in T-limited systems -> decreased wood density (?) -> increased susceptibility to MPB
-   - High temperature release reported in PILO in White Mountains by [cite:@salzerRecentUnprecedentedTreering2009]
+** Conclusions
+[cite:@bentzGreatBasinBristlecone2022] determined that the PILO mortality event on Telescope Peak occured at a location that is middle of the road in PILO's climate space.  Their climatic analysis used PRISM 30 year normals and the Hamon method to determine PET, following [cite:@lutzClimaticWaterDeficit2010].  While their code and thus exact method was not provided, we were able to approximately recreate their analysis above, receiving similar results.
+
+Our analysis using the Simple Water Balance model method with Hamon PET calculations placed the Telescope Peak sites in a different climatic space than reported by [cite:@bentzGreatBasinBristlecone2022].  We found that the Telescope Peak sites had extremely low AET (89.2 - 107 mean for all years, mean for all sites for all years = 206), while CWD values were around the average for all sites.   
 
 
 * Bibliography 
