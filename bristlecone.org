@@ -14,7 +14,6 @@
 #+BIBLIOGRAPHY:bristlecone.bib
 #+cite_export: csl
 #+BABEL: :session *R* :cache yes :results output graphics :exports both :tangle yes \n :eval never-export
-#+EXPORT_FILE_NAME: exports/index.html
 
 * Introduction
 This project extends the climate analysis conducted on the PILO mortality cite documented by [cite:@bentzGreatBasinBristlecone2022].  We attempt to recreate their analysis [[*Lutz et al. 2010 Water Balance Method][here]], as well as run an additional analysis following David Thoma's simple water balance model which uses daily Daymet timeseries and incorporates additional physical site parameters and therefore may provided a more advanced analysis of the site.
@@ -28,6 +27,7 @@ Implement water balance model following David Thoma's Simple Water Balance Model
   library(tidyverse)
   library(WaterBalance)
   library(lubridate)
+  library(gghighlight)
 #+end_src
 
 #+RESULTS:
@@ -53,6 +53,8 @@ Implement water balance model following David Thoma's Simple Water Balance Model
 | base         |
 
 Use Penman PET calculation.  Modified from ~WaterBalance::ET_PenmanMonteith_daily~ to work with our data and workflow.  [[https://github.com/CCRP-Adaptation/WaterBalance/blob/6d19806ce5aa6abb6521607fd2da19238dae561d/WaterBalance/R/ET_functions.R#L178][Original version]] had additional arguments for elev and lat, but to facilitate process the df we generate later of all sites we pass lat and elev with each site.
+
+According to David Thoma, ~WaterBalance::ET_PenmanMonteith_daily~ has not been validated against the Simple Water Balance Model xlsm
 
 #+begin_src R :results output silent :session :eval never-export
   ET_PenmanMonteith_daily = function(x, wind=NULL) {
@@ -244,6 +246,12 @@ Summary table calculations (Hamon)
   }
 
   loc_colors <- c("red", "green", "aquamarine", "darkorchid1", "black")
+
+  mt_list <- c("PANAMINT RANGE",
+               "WAH WAH MOUNTAINS",
+               "SILVER PEAK RANGE",
+               "HOT CREEK RANGE")
+             
 #+end_src
 
 **** AET x CWD
@@ -252,11 +260,12 @@ Summary table calculations (Hamon)
 ***** Penman
 #+begin_src R :session :file aet_cwd_penman_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_penman %>%
-    mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
+    left_join(points, by = "site") %>%
     ggplot() +
-    geom_point(mapping = aes(x = D, y = AET, col = loc)) +
-    scale_color_manual(name = 'Location', values = loc_colors) +
-    ggtitle("AET x CWD Penman Daymet")
+    geom_point(mapping = aes(x = D, y = AET, col = mt_range)) +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    ggtitle("AET x CWD Penman Daymet SWB")
 #+end_src
 
 #+RESULTS:
@@ -266,35 +275,101 @@ Summary table calculations (Hamon)
 ***** Hamon
 #+begin_src R :session :file aet_cwd_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_hamon %>%
-     mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
-     ggplot() +
-     geom_point(mapping = aes(x = D, y = AET, col = loc)) +
-     scale_color_manual(name = 'Location', values = loc_colors) +
-     ggtitle("AET x CWD Hamon Daymet")
+    left_join(points, by = "site") %>%
+    ggplot(mapping = aes(x = D, y = AET, color = mt_range)) +
+    geom_point() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    ggtitle("AET x CWD Hamon Daymet SWB")
 #+end_src
 
 #+RESULTS:
-[[file:2.png]]
+[[file:aet_cwd_hamon_daymet_swb.png]]
 
 **** Time Series
 ***** AET
-****** TODO Hamon
-#+begin_src R :session :file all_variables_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
-  summary_tbl_by_year_hamon %>%
-    mutate(loc = fct_relevel(find_loc(site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
-    ggplot() +
-    geom_line(mapping = aes(x = year, y = AET), color = loc) +
-    scale_color_manual(name = 'Location', values = loc_colors)
+****** Hamon
+#+begin_src R :session :file aet_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+  summary_tbl_by_month_hamon %>%
+    filter(year >= 2012) %>%
+    left_join(points, by = "site") %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = AET, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    ggtitle("AET Time Series Hamon Daymet SWB")
+
 #+end_src
+
+#+RESULTS:
+[[file:aet_timeseries_hamon_daymet_swb.png]]
+
 ****** TODO Penman
 ***** CWD
-****** TODO Hamon
+****** Hamon
+#+begin_src R :session :file cwd_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+  summary_tbl_by_month_hamon %>%
+    filter(year >= 2012) %>%
+    left_join(points, by = "site") %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = D, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    ggtitle("CWD Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:cwd_timeseries_hamon_daymet_swb.png]]
+
 ****** TODO Penman
 ***** PPT
-****** TODO Hamon
+****** Hamon
+#+begin_src R :session :file ppt_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+  summary_tbl_by_month_hamon %>%
+    filter(year >= 2012) %>%
+    left_join(points, by = "site") %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = ppt, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    ggtitle("PPT Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:ppt_timeseries_hamon_daymet_swb.png]]
+
 ****** TODO Penman
 ***** T
-****** TODO Hamon
+****** Hamon
+#+begin_src R :session :file t_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1600
+  summary_tbl_by_month_hamon %>%
+    filter(year >= 2012) %>%
+    left_join(points, by = "site") %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = T, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    ggtitle("T Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:t_timeseries_hamon_daymet_swb.png]]
+
 ****** TODO Penman
 *** TODO Jennings Coef
 Mike thought jtemp could cause significant differences in these calculations, causing the differences between the models.  Could cause funky calculations in snowpack.  
@@ -310,30 +385,32 @@ Following [cite:@bentzGreatBasinBristlecone2022], Implement water balance model 
   library(ggplot2)
   library(tidyverse)
   library(lubridate)
+  library(gghighlight)
 #+end_src
 
 #+RESULTS:
-| lubridate |
-| forcats   |
-| stringr   |
-| dplyr     |
-| purrr     |
-| readr     |
-| tidyr     |
-| tibble    |
-| tidyverse |
-| raster    |
-| sp        |
-| plotly    |
-| ggplot2   |
-| prism     |
-| stats     |
-| graphics  |
-| grDevices |
-| utils     |
-| datasets  |
-| methods   |
-| base      |
+| gghighlight |
+| lubridate   |
+| forcats     |
+| stringr     |
+| dplyr       |
+| purrr       |
+| readr       |
+| tidyr       |
+| tibble      |
+| tidyverse   |
+| raster      |
+| sp          |
+| plotly      |
+| ggplot2     |
+| prism       |
+| stats       |
+| graphics    |
+| grDevices   |
+| utils       |
+| datasets    |
+| methods     |
+| base        |
 
 Be sure to set the download folder using ~prism_set_dl_dir()~.
 #+begin_src R :session *R2* :results output none :eval never-export
@@ -523,10 +600,15 @@ Only needs to be run once after which data is saved to prism dl dir
   }
 
   loc_colors <- c("red", "green", "aquamarine", "darkorchid1", "black")
+
+  mt_list <- c("PANAMINT RANGE",
+               "WAH WAH MOUNTAINS",
+               "SILVER PEAK RANGE",
+               "HOT CREEK RANGE")
 #+end_src
 
 **** AET x CWD
-#+begin_src R :session *R2* :file 3.png :results output graphics file :eval never-export :exports both
+#+begin_src R :session *R2* :file aed_x_cwd_hamon_prism_lutz.png :results output graphics file :eval never-export :exports both
   result %>%
     group_by(Site) %>%
     filter(Elev_m != TRUE) %>%
@@ -535,18 +617,19 @@ Only needs to be run once after which data is saved to prism dl dir
               T = mean(tmean),
               ppt = sum(ppt),
               elev = mean(Elev_m)) %>%
-    mutate(loc = fct_relevel(find_loc(Site), c("panamint", "wah_wah", "silver_peak", "rawhide", "other"))) %>%
-    group_by(loc) %>%
-    arrange(desc(loc)) %>%
-    ggplot() +
-    geom_point(mapping = aes(x = D, y = AET, color = loc)) +
-    scale_color_manual(name = 'Location', values = loc_colors)
+    left_join(points, by = "Site") %>%
+    ggplot(mapping = aes(x = D, y = AET, color = MT_range)) +
+    geom_point() +
+    gghighlight(MT_range %in% mt_list,
+                use_direct_label = FALSE) +
+    ggtitle("AED x CWD Hamon PRISM Lutz")
+
 #+end_src
 
 #+RESULTS:
-[[file:3.png]]
+[[file:aed_x_cwd_hamon_prism_lutz.png]]
 
-* *Hypotheses*
+* Hypotheses
 1. Low AET values -> carbon starvation -> increased susceptibility to MPB
 2. High treeline temperature growth release.  High temps -> accelerated growth rates in T-limited systems -> decreased wood density (?) -> increased susceptibility to MPB
    - High temperature release reported in PILO in White Mountains by [cite:@salzerRecentUnprecedentedTreering2009]
