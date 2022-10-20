@@ -23,11 +23,11 @@ Our aim is to examine the mortality event occuring at Panamint Range (Telescope 
 Three analyses were performed:
 1. [[*Simple Water Balance Model (Excel)][Simple Water Balance Model (Excel)]]
    ~shareable_Excel_xlsm_water_balance_model_v3.xlsm~
-   Simple Water Balance model implemented in Excel provided by David Toma
+   Simple Water Balance model implemented in Excel provided by David Toma, using Daymet daily time series
 2. [[*Simple Water Balance Model (R)][Simple Water Balance model (R)]]
-   Simple Water Balance Model implemented in R making use of [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]] project
+   Simple Water Balance Model implemented in R making use of [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]] project, using Daymet daily time series
 3. [[*Lutz et al. 2010 Water Balance Method][Lutz et al. 2010 Water Balance Method]]
-   Lutz 2010 Water Balance Model implemented in R following methods in [cite:@bentzGreatBasinBristlecone2022], which followed [cite:@lutzClimaticWaterDeficit2010]
+   Lutz 2010 Water Balance Model implemented in R following methods in [cite:@bentzGreatBasinBristlecone2022], which followed [cite:@lutzClimaticWaterDeficit2010], using PRISM 30yr normals
 
 * Data
 
@@ -219,9 +219,8 @@ Data from David Thoma's Simple Water Balance model xlsm, processed using provide
 [[file:aed_cwd_change.png]]
 
 * Simple Water Balance Model (R)
-** Daymet
 Implement water balance model following David Thoma's Simple Water Balance Model and [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]], using Daymet data
-*** Libraries and Function Definitions
+** Libraries and Function Definitions
 #+begin_src R :session :eval never-export
   library(raster)
   library(tidyverse)
@@ -311,7 +310,7 @@ According to David Thoma, ~WaterBalance::ET_PenmanMonteith_daily~ has not been v
 }
 #+end_src
 
-*** Data Import and Cleanup
+** Data Import and Cleanup
 
 Read sites.csv file, same format used for processing with simple water balance model xlsm
 #+begin_src R :session :results output silent :eval never-export
@@ -352,7 +351,7 @@ Read sites.csv file, same format used for processing with simple water balance m
   alldaymetdata <- as_tibble(do.call(rbind, alldaymetdata))
 #+end_src
 
-*** Calculate Water Balance parameters
+** Calculate Water Balance parameters
 #+begin_src R :session :results output none :eval never-export
   wbdata <- alldaymetdata %>%
     left_join(points, by = "site") %>%
@@ -429,8 +428,8 @@ Summary table calculations (Hamon)
     group_by(site) %>%
     summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD))
 #+end_src
-*** Figures
-**** Helper Functions
+** Figures
+*** Helper Functions
 #+begin_src R :session :results output none :eval never-export
   find_loc <- function(x) {
     #' Lookup site.csv in locations to determine if in region of interest
@@ -454,10 +453,10 @@ Summary table calculations (Hamon)
              
 #+end_src
 
-**** AET x CWD
+*** AET x CWD
 
 
-***** Penman
+**** Penman
 #+begin_src R :session :file aet_cwd_penman_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_penman %>%
     left_join(points, by = "site") %>%
@@ -472,7 +471,7 @@ Summary table calculations (Hamon)
 [[file:aet_cwd_penman_daymet_swb.png]]
 
 
-***** Hamon
+**** Hamon
 #+begin_src R :session :file aet_cwd_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_hamon %>%
     left_join(points, by = "site") %>%
@@ -486,9 +485,9 @@ Summary table calculations (Hamon)
 #+RESULTS:
 [[file:aet_cwd_hamon_daymet_swb.png]]
 
-**** Time Series
-***** AET
-****** Hamon
+*** Time Series
+**** AET
+***** Hamon
 #+begin_src R :session :file aet_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
@@ -507,9 +506,9 @@ Summary table calculations (Hamon)
 #+RESULTS:
 [[file:aet_timeseries_hamon_daymet_swb.png]]
 
-****** TODO Penman
-***** CWD
-****** Hamon
+***** TODO Penman
+**** CWD
+***** Hamon
 #+begin_src R :session :file cwd_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
@@ -528,9 +527,9 @@ Summary table calculations (Hamon)
 #+RESULTS:
 [[file:cwd_timeseries_hamon_daymet_swb.png]]
 
-****** TODO Penman
-***** PPT
-****** Hamon
+***** TODO Penman
+**** PPT
+***** Hamon
 #+begin_src R :session :file ppt_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
@@ -549,9 +548,9 @@ Summary table calculations (Hamon)
 #+RESULTS:
 [[file:ppt_timeseries_hamon_daymet_swb.png]]
 
-****** TODO Penman
-***** T
-****** Hamon
+***** TODO Penman
+**** T
+***** Hamon
 #+begin_src R :session :file t_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
   summary_tbl_by_month_hamon %>%
     filter(year >= 2012) %>%
@@ -570,14 +569,13 @@ Summary table calculations (Hamon)
 #+RESULTS:
 [[file:t_timeseries_hamon_daymet_swb.png]]
 
-****** TODO Penman
-*** TODO Jennings Coef
+***** TODO Penman
+** TODO Jennings Coef
 Mike thought jtemp could cause significant differences in these calculations, causing the differences between the models.  Could cause funky calculations in snowpack.  
 
 * Lutz et al. 2010 Water Balance Method
-** PRISM
 Following [cite:@bentzGreatBasinBristlecone2022], Implement water balance model as in [cite:@lutzClimaticWaterDeficit2010] and supplemental.  Use 800m PRISM 30 yr normals.
-*** Libraries
+** Libraries
 #+begin_src R :session *R2* :eval never-export
   library(prism)
   library(plotly)
@@ -616,7 +614,7 @@ Be sure to set the download folder using ~prism_set_dl_dir()~.
 #+begin_src R :session *R2* :results output none :eval never-export
   prism_set_dl_dir("~/prismtmp")
 #+end_src
-*** Water Balance Functions
+** Water Balance Functions
 Implement water balance functions from [cite:@lutzClimaticWaterDeficit2010] supplemental
 #+begin_src R :session *R2* :results output none :eval never-export
   get_f <- function (tmean) {
@@ -720,7 +718,7 @@ Implement water balance functions from [cite:@lutzClimaticWaterDeficit2010] supp
   }
 
 #+end_src
-*** Download PRISM Normals
+** Download PRISM Normals
 Only needs to be run once after which data is saved to prism dl dir
 #+begin_src R :session *R2* :results output none :eval never never-export
   get_prism_normals("ppt", "800m", annual = TRUE, keepZip = FALSE)
@@ -729,7 +727,7 @@ Only needs to be run once after which data is saved to prism dl dir
   get_prism_normals("tmean", "800m", mon = 1:12, keepZip = FALSE)
 #+end_src
 
-*** Data Import and Cleanup
+** Data Import and Cleanup
 #+begin_src R :session *R2* :results output none :eval never-export
   points <- read_csv("./sites.csv")
   points.spdf <- SpatialPointsDataFrame(coords = points[,c('Lon', 'Lat')],
@@ -750,7 +748,7 @@ Only needs to be run once after which data is saved to prism dl dir
   }
 #+end_src
 
-*** Water Balance Calculations
+** Water Balance Calculations
 #+begin_src R :session *R2* :results output none :eval never-export
   result <- res %>%
     left_join(points, by = c("Site" = "Site")) %>%
@@ -782,9 +780,9 @@ Only needs to be run once after which data is saved to prism dl dir
            D = PET - AET)
 #+end_src
 
-*** Figures
+** Figures
 
-**** Helper Functions
+*** Helper Functions
 #+begin_src R :session *R2* :results output none :eval never-export
   find_loc <- function(x) {
     #' Lookup site.csv in locations to determine if in region of interest
@@ -807,7 +805,7 @@ Only needs to be run once after which data is saved to prism dl dir
                "HOT CREEK RANGE")
 #+end_src
 
-**** AET x CWD
+*** AET x CWD
 #+begin_src R :session *R2* :file aet_x_cwd_hamon_prism_lutz.png :results output graphics file :eval never-export :exports both
   result %>%
     group_by(Site) %>%
