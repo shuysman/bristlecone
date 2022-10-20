@@ -808,7 +808,7 @@ Only needs to be run once after which data is saved to prism dl dir
 #+end_src
 
 **** AET x CWD
-#+begin_src R :session *R2* :file aed_x_cwd_hamon_prism_lutz.png :results output graphics file :eval never-export :exports both
+#+begin_src R :session *R2* :file aet_x_cwd_hamon_prism_lutz.png :results output graphics file :eval never-export :exports both
   result %>%
     group_by(Site) %>%
     filter(Elev_m != TRUE) %>%
@@ -822,12 +822,12 @@ Only needs to be run once after which data is saved to prism dl dir
     geom_point() +
     gghighlight(MT_range %in% mt_list,
                 use_direct_label = FALSE) +
-    ggtitle("AED x CWD Hamon PRISM Lutz")
+    ggtitle("AET x CWD Hamon PRISM Lutz")
 
 #+end_src
 
 #+RESULTS:
-[[file:aed_x_cwd_hamon_prism_lutz.png]]
+[[file:aet_x_cwd_hamon_prism_lutz.png]]
 
 * Hypotheses
 1. Low AET values -> carbon starvation -> increased susceptibility to MPB
