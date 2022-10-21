@@ -472,7 +472,7 @@ Summary table calculations (Hamon)
 
 
 **** Penman
-#+begin_src R :session :file aet_cwd_penman_daymet_swb.png :results graphics file :eval never-export :exports both
+#+begin_src R :session :file img/aet_cwd_penman_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_penman %>%
     left_join(points, by = "site") %>%
     ggplot() +
@@ -483,11 +483,11 @@ Summary table calculations (Hamon)
 #+end_src
 
 #+RESULTS:
-[[file:aet_cwd_penman_daymet_swb.png]]
+[[file:img/aet_cwd_penman_daymet_swb.png]]
 
 
 **** Hamon
-#+begin_src R :session :file aet_cwd_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
+#+begin_src R :session :file img/aet_cwd_hamon_daymet_swb.png :results graphics file :eval never-export :exports both
   summary_tbl_all_hamon %>%
     left_join(points, by = "site") %>%
     ggplot(mapping = aes(x = D, y = AET, color = mt_range)) +
@@ -498,7 +498,7 @@ Summary table calculations (Hamon)
 #+end_src
 
 #+RESULTS:
-[[file:aet_cwd_hamon_daymet_swb.png]]
+[[file:img/aet_cwd_hamon_daymet_swb.png]]
 
 *** Monthly Time Series
 **** AET
