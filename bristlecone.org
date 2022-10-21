@@ -18,7 +18,7 @@
 * Introduction
 This project extends the climate analysis conducted on the PILO mortality cite documented by [cite:@bentzGreatBasinBristlecone2022].  We attempt to recreate their analysis [[*Lutz et al. 2010 Water Balance Method][here]], as well as run an additional analysis following David Thoma's simple water balance model which uses daily Daymet timeseries and incorporates additional physical site parameters and therefore may provided a more advanced, and hopefully accurate, analysis of the site.
 
-Our aim is to examine the mortality event occuring at Panamint Range (Telescope Peak), which was attributed to Mountain Pine Beetle [cite:@bentzGreatBasinBristlecone2022].  Mortality events also occured at Wah Wah Mountains (Pinyon Ips), Silver Peak (unattributed) , and Hot Creek Range/Rawhide (unattributed).
+Our aim is to examine the mortality event occuring at Panamint Range (Telescope Peak), which was attributed to Mountain Pine Beetle [cite:@bentzGreatBasinBristlecone2022].  Mortality events also occured at Wah Wah Mountains (Pinyon Ips), Silver Peak (unattributed) , and Hot Creek Range/Rawhide (unattributed).  While the mortality event was not recorded until 2022, it is believed that it occured around 2017.
 
 Three analyses were performed:
 1. [[*Simple Water Balance Model (Excel)][Simple Water Balance Model (Excel)]]
@@ -28,6 +28,10 @@ Three analyses were performed:
    Simple Water Balance Model implemented in R making use of [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]] project, using Daymet daily time series
 3. [[*Lutz et al. 2010 Water Balance Method][Lutz et al. 2010 Water Balance Method]]
    Lutz 2010 Water Balance Model implemented in R following methods in [cite:@bentzGreatBasinBristlecone2022], which followed [cite:@lutzClimaticWaterDeficit2010], using PRISM 30yr normals
+
+** Map
+#+attr_html: :width 800px
+[[file:./img/map.png]]
 
 * Data
 
@@ -41,7 +45,7 @@ SSURGO database
 ~merged_jennings.tif~
 
 * Simple Water Balance Model (Excel)
-Data from David Thoma's Simple Water Balance model xlsm, processed using provided batch script.  Daymet data obtained using extract_daymet_batch.py script.  PET Values calculated with Penman method
+Data from David Thoma's Simple Water Balance model xlsm, processed using provided batch script.  Daymet data obtained using ~extract_daymet_batch.py~ script.  PET Values calculated with Penman method
 ** Libraries
 #+begin_src R :session *R3* :eval never-export
   library(tidyverse)
@@ -130,8 +134,9 @@ Data from David Thoma's Simple Water Balance model xlsm, processed using provide
     group_by(MT_range)
 #+end_src
 
-** AET x CWD
-#+begin_src R  :session *R3* :eval never-export :results output graphics file :file aed_cwd_excel.png :exports both
+** Figures
+*** AET x CWD
+#+begin_src R  :session *R3* :eval never-export :results output graphics file :file img/aed_cwd_excel.png :exports both
     summary_tbl %>%
     ggplot() +
     geom_point(mapping = aes(x = mean_D, y = mean_AET, col = MT_range)) +
@@ -141,10 +146,10 @@ Data from David Thoma's Simple Water Balance model xlsm, processed using provide
 #+end_src
 
 #+RESULTS:
-[[file:aed_cwd_excel.png]]
+[[file:img/aed_cwd_excel.png]]
 
-** Pre 2010 Plot
-#+begin_src R :session *R3* :eval never-export :file pre_2010.png :results output graphics file :exports both
+*** Pre 2010 Plot
+#+begin_src R :session *R3* :eval never-export :file img/pre_2010.png :results output graphics file :exports both
   cwd_plt_pre_2010 <- summary_tbl %>%
     ggplot() +
     geom_point(mapping = aes(x = mean_t_pre_2010, y = mean_D_pre_2010, color = MT_range)) +
@@ -172,10 +177,10 @@ Data from David Thoma's Simple Water Balance model xlsm, processed using provide
 #+end_src
 
 #+RESULTS:
-[[file:pre_2010.png]]
+[[file:img/pre_2010.png]]
 
-** Post 2010 Plot
-#+begin_src R :session *R3* :eval never-export :file post_2010.png :results output graphics file :exports both
+*** Post 2010 Plot
+#+begin_src R :session *R3* :eval never-export :file img/post_2010.png :results output graphics file :exports both
   cwd_plt_post_2010 <- summary_tbl %>%
     ggplot() +
     geom_point(mapping = aes(x = mean_t_post_2010, y = mean_D_post_2010, color = MT_range)) +
@@ -203,10 +208,10 @@ Data from David Thoma's Simple Water Balance model xlsm, processed using provide
 #+end_src
 
 #+RESULTS:
-[[file:post_2010.png]]
+[[file:img/post_2010.png]]
 
-** Change Plot
-#+begin_src R :session *R3* :eval never-export :file aed_cwd_change.png :results output graphics file :exports bothp
+*** Change Plot
+#+begin_src R :session *R3* :eval never-export :file img/aed_cwd_change.png :results output graphics file :exports bothp
   summary_tbl %>%
     ggplot(aes(x = mean_D_pre_2010, y = mean_AET_pre_2010, color = MT_range)) +
     geom_arrow(aes(dx = dD, dy = dAET)) +
@@ -216,7 +221,7 @@ Data from David Thoma's Simple Water Balance model xlsm, processed using provide
 #+end_src
 
 #+RESULTS:
-[[file:aed_cwd_change.png]]
+[[file:img/aed_cwd_change.png]]
 
 * Simple Water Balance Model (R)
 Implement water balance model following David Thoma's Simple Water Balance Model and [[https://github.com/CCRP-Adaptation/WaterBalance][CCRP-Adaptation/WaterBalance]], using Daymet data
@@ -337,7 +342,7 @@ Read sites.csv file, same format used for processing with simple water balance m
 #+end_src
 
 
- Load downloaded daymet data.  Can be batch downloaded using sites.csv file using extract_daymet_batch.py script.  File names (1.csv, 2.csv, ... 512.csv) need to match filenames in sites.csv file.
+ Load downloaded daymet data.  Can be batch downloaded using sites.csv file using ~extract_daymet_batch.py~ script.  File names (1.csv, 2.csv, ... 512.csv) need to match filenames in sites.csv file.
 #+begin_src R :session :results output silent :eval never-export
   alldaymetdata <- list()
   for (i in 1:length(points$site)) {
@@ -403,7 +408,7 @@ Summary table calculations (Penman)
 #+begin_src R :session :results output none :eval never-export
   summary_tbl_by_month_penman <- wbdata_penman %>%
     group_by(site, year, Month) %>%
-    summarise(lat = lat, lon = lon, ppt = sum(prcp), T = mean(tmean_C), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
+    summarise(lat = lat, lon = lon, ppt = sum(prcp), T = mean(tmean_C), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD), RAIN = sum(RAIN), SNOW = sum(SNOW), PACK = max(PACK), SOIL = mean(SOIL)) %>% distinct()
 
   summary_tbl_by_year_penman <- summary_tbl_by_month_penman %>%
     group_by(site, year) %>%
@@ -412,13 +417,18 @@ Summary table calculations (Penman)
   summary_tbl_all_penman <- summary_tbl_by_year_penman %>%
     group_by(site) %>%
     summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD))
+
+  summary_tbl_by_month_range_penman <- summary_tbl_by_month_penman %>%
+    left_join(points, by = "site") %>%
+    group_by(mt_range, year, Month) %>%
+    summarize(ppt = mean(ppt), T = mean(T), PET = mean(PET),  AET = mean(AET), D = mean(D), GDD = mean(GDD), RAIN = mean(RAIN), SNOW = mean(SNOW), PACK = mean(PACK), SOIL = mean(SOIL))
 #+end_src
 
 Summary table calculations (Hamon)
 #+begin_src R :session :results output none :eval never-export
   summary_tbl_by_month_hamon <- wbdata_hamon %>%
     group_by(site, year, Month) %>%
-    summarise(lat = lat, lon = lon, ppt = sum(prcp), T = mean(tmean_C), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD)) %>% distinct()
+    summarise(lat = lat, lon = lon, ppt = sum(prcp), T = mean(tmean_C), PET = sum(PET),  AET = sum(AET), D = sum(D), GDD = sum(GDD), RAIN = sum(RAIN), SNOW = sum(SNOW), PACK = max(PACK), SOIL = mean(SOIL)) %>% distinct()
 
   summary_tbl_by_year_hamon <- summary_tbl_by_month_hamon %>%
     group_by(site, year) %>%
@@ -427,6 +437,11 @@ Summary table calculations (Hamon)
   summary_tbl_all_hamon <- summary_tbl_by_year_hamon %>%
     group_by(site) %>%
     summarise(ppt = mean(ppt), T = mean(T), AET = mean(AET), D = mean(D), GDD = mean(GDD))
+
+  summary_tbl_by_month_range_hamon <- summary_tbl_by_month_hamon %>%
+    left_join(points, by = "site") %>%
+    group_by(mt_range, year, Month) %>%
+    summarize(ppt = mean(ppt), T = mean(T), PET = mean(PET),  AET = mean(AET), D = mean(D), GDD = mean(GDD), RAIN = mean(RAIN), SNOW = mean(SNOW), PACK = mean(PACK), SOIL = mean(SOIL))
 #+end_src
 ** Figures
 *** Helper Functions
@@ -485,34 +500,53 @@ Summary table calculations (Hamon)
 #+RESULTS:
 [[file:aet_cwd_hamon_daymet_swb.png]]
 
-*** Time Series
+*** Monthly Time Series
 **** AET
 ***** Hamon
-#+begin_src R :session :file aet_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
-  summary_tbl_by_month_hamon %>%
-    filter(year >= 2012) %>%
-    left_join(points, by = "site") %>%
-    group_by(mt_range) %>%
-    mutate(yearmon = make_date(year, Month)) %>%
-    ggplot(mapping = aes(x = yearmon, y = AET, color = mt_range)) +
-    geom_line() +
-    gghighlight(mt_range %in% mt_list,
-                use_direct_label = FALSE) +
-    theme(legend.position = "bottom") +
-    ggtitle("AET Time Series Hamon Daymet SWB")
+#+begin_src R :session :file img/aet_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+    summary_tbl_by_month_range_hamon %>%
+      filter(year >= 2012) %>%
+      group_by(mt_range) %>%
+      mutate(yearmon = make_date(year, Month)) %>%
+      ggplot(mapping = aes(x = yearmon, y = AET, color = mt_range)) +
+      geom_line() +
+      gghighlight(mt_range %in% mt_list,
+                  use_direct_label = FALSE) +
+      theme(legend.position = "bottom") +
+      scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                   date_minor_breaks = "1 month") +
+      ggtitle("AET Monthly Time Series Hamon Daymet SWB")
 
 #+end_src
 
 #+RESULTS:
-[[file:aet_timeseries_hamon_daymet_swb.png]]
+[[file:img/aet_timeseries_hamon_daymet_swb.png]]
 
-***** TODO Penman
+***** Penman
+#+begin_src R :session :file img/aet_timeseries_penman_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+    summary_tbl_by_month_range_penman %>%
+      filter(year >= 2012) %>%
+      group_by(mt_range) %>%
+      mutate(yearmon = make_date(year, Month)) %>%
+      ggplot(mapping = aes(x = yearmon, y = AET, color = mt_range)) +
+      geom_line() +
+      gghighlight(mt_range %in% mt_list,
+                  use_direct_label = FALSE) +
+      theme(legend.position = "bottom") +
+      scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                   date_minor_breaks = "1 month") +
+      ggtitle("AET Monthly Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:img/aet_timeseries_penman_daymet_swb.png]]
+
 **** CWD
 ***** Hamon
-#+begin_src R :session :file cwd_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
-  summary_tbl_by_month_hamon %>%
+#+begin_src R :session :file img/cwd_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_hamon %>%
     filter(year >= 2012) %>%
-    left_join(points, by = "site") %>%
     group_by(mt_range) %>%
     mutate(yearmon = make_date(year, Month)) %>%
     ggplot(mapping = aes(x = yearmon, y = D, color = mt_range)) +
@@ -520,20 +554,40 @@ Summary table calculations (Hamon)
     gghighlight(mt_range %in% mt_list,
                 use_direct_label = FALSE) +
     theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
     ggtitle("CWD Time Series Hamon Daymet SWB")
 
 #+end_src
 
 #+RESULTS:
-[[file:cwd_timeseries_hamon_daymet_swb.png]]
+[[file:img/cwd_timeseries_hamon_daymet_swb.png]]
 
-***** TODO Penman
-**** PPT
-***** Hamon
-#+begin_src R :session :file ppt_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
-  summary_tbl_by_month_hamon %>%
+***** Penman
+#+begin_src R :session :file img/cwd_timeseries_penman_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_penman %>%
     filter(year >= 2012) %>%
-    left_join(points, by = "site") %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = D, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
+    ggtitle("CWD Time Series Penman Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:img/cwd_timeseries_penman_daymet_swb.png]]
+
+**** PPT
+***** Hamon/Penman
+#+begin_src R :session :file img/ppt_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_hamon %>%
+    filter(year >= 2012) %>%
     group_by(mt_range) %>%
     mutate(yearmon = make_date(year, Month)) %>%
     ggplot(mapping = aes(x = yearmon, y = ppt, color = mt_range)) +
@@ -541,20 +595,23 @@ Summary table calculations (Hamon)
     gghighlight(mt_range %in% mt_list,
                 use_direct_label = FALSE) +
     theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
     ggtitle("PPT Time Series Hamon Daymet SWB")
 
 #+end_src
 
 #+RESULTS:
-[[file:ppt_timeseries_hamon_daymet_swb.png]]
+[[file:img/ppt_timeseries_hamon_daymet_swb.png]]
 
-***** TODO Penman
+PPT time series should not vary between Hamon/Penman calculations
+
+
 **** T
-***** Hamon
-#+begin_src R :session :file t_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
-  summary_tbl_by_month_hamon %>%
+***** Hamon/Penman
+#+begin_src R :session :file img/t_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_hamon %>%
     filter(year >= 2012) %>%
-    left_join(points, by = "site") %>%
     group_by(mt_range) %>%
     mutate(yearmon = make_date(year, Month)) %>%
     ggplot(mapping = aes(x = yearmon, y = T, color = mt_range)) +
@@ -562,14 +619,107 @@ Summary table calculations (Hamon)
     gghighlight(mt_range %in% mt_list,
                 use_direct_label = FALSE) +
     theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
     ggtitle("T Time Series Hamon Daymet SWB")
 
 #+end_src
 
 #+RESULTS:
-[[file:t_timeseries_hamon_daymet_swb.png]]
+[[file:img/t_timeseries_hamon_daymet_swb.png]]
 
-***** TODO Penman
+T Time series should not vary between Hamon/Penman calculations
+
+**** SOIL
+
+***** Hamon
+#+begin_src R :session :file img/SOIL_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_hamon %>%
+    filter(year >= 2012) %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = SOIL, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
+    ggtitle("SOIL Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:img/SOIL_timeseries_hamon_daymet_swb.png]]
+
+***** Penman
+#+begin_src R :session :file img/SOIL_timeseries_penman_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_penman %>%
+    filter(year >= 2012) %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = SOIL, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
+    ggtitle("SOIL Time Series Penman Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:img/SOIL_timeseries_penman_daymet_swb.png]]
+
+**** PACK
+
+***** Hamon/Penman
+#+begin_src R :session :file img/PACK_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_hamon %>%
+    filter(year >= 2012) %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = PACK, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
+    ggtitle("PACK Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:img/PACK_timeseries_hamon_daymet_swb.png]]
+
+PACK should not vary between Hamon/Penman calculations
+
+**** GDD
+
+***** Hamon/Penman
+#+begin_src R :session :file img/GDD_timeseries_hamon_daymet_swb.png :results graphics file :eval never-export :exports both :width 1080
+  summary_tbl_by_month_range_hamon %>%
+    filter(year >= 2012) %>%
+    group_by(mt_range) %>%
+    mutate(yearmon = make_date(year, Month)) %>%
+    ggplot(mapping = aes(x = yearmon, y = GDD, color = mt_range)) +
+    geom_line() +
+    gghighlight(mt_range %in% mt_list,
+                use_direct_label = FALSE) +
+    theme(legend.position = "bottom") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+                 date_minor_breaks = "1 month") +
+    ggtitle("GDD Time Series Hamon Daymet SWB")
+
+#+end_src
+
+#+RESULTS:
+[[file:img/GDD_timeseries_hamon_daymet_swb.png]]
+
+GDD results do not vary between Hamon/Penman calculations
+
 ** TODO Jennings Coef
 Mike thought jtemp could cause significant differences in these calculations, causing the differences between the models.  Could cause funky calculations in snowpack.  
 
@@ -806,7 +956,7 @@ Only needs to be run once after which data is saved to prism dl dir
 #+end_src
 
 *** AET x CWD
-#+begin_src R :session *R2* :file aet_x_cwd_hamon_prism_lutz.png :results output graphics file :eval never-export :exports both
+#+begin_src R :session *R2* :file img/aet_x_cwd_hamon_prism_lutz.png :results output graphics file :eval never-export :exports both
   result %>%
     group_by(Site) %>%
     filter(Elev_m != TRUE) %>%
@@ -825,30 +975,36 @@ Only needs to be run once after which data is saved to prism dl dir
 #+end_src
 
 #+RESULTS:
-[[file:aet_x_cwd_hamon_prism_lutz.png]]
+[[file:img/aet_x_cwd_hamon_prism_lutz.png]]
+
 
 * Hypotheses
 1. Low AET values -> carbon starvation -> increased susceptibility to MPB
 2. High treeline temperature growth release.  High temps -> accelerated growth rates in T-limited systems -> decreased wood density (?) -> increased susceptibility to MPB
    - High temperature release reported in PILO in White Mountains by [cite:@salzerRecentUnprecedentedTreering2009]
 3. Beetle Hypothesis: Exploding beetle populations, enhanced by climate change, are overwhelming usual food source, PIFL.  The beetles are forced to seek out novel food sources (i.e., PILO, which has previously been shown to be resistant to MPB [cite:@bentzDefenseTraitsLong2017]).  Beetle feeding could occur at low, undetected levels in PILO and not cause apparent harm, might be now passing threshold that can kill trees.
+4. PIFL promixity theory:  This is the theory proposed by [cite:@bentzGreatBasinBristlecone2022].  It is proposed that the presence of nearby infested PIFL led to the infestation of normally resistant PILO trees.
 
 
 * Discussion
 ** Issues
-Penman PET calculation returns extreme values for CWD and AET.  This occurs in both analyses above implementing the Simple Water Balance model in R and Excel.  The CWD values generated would be expected from a desert rather than montane forest.  This occurs with both our version as well as the version from WaterBalance.  ~WaterBalance::ET_Hamon_daily~ however appears to return correct results.  The patterns remain consistent between Hamon and Penman analyses, but absolute values vary.
+Penman PET calculation returns extreme values for CWD and AET.  This occurs in both analyses above implementing the Simple Water Balance model in R and Excel.  The CWD values generated would be expected from a desert rather than montane forest.  This occurs with both our version as well as the version from WaterBalance.  The patterns remain consistent between Hamon and Penman analyses, but absolute values vary.  The differences in calculated CWD appear to result from the soil moisture content calculations (SOIL), with Penman calculations showing reduced availability of late season soil moisture compared with Hamon calculations.  
 
-(Possible) Reasons for differences between models:
+Possible Reasons for differences between models:
 - Additional Variables accounted for in Simple Water Balance Model that are missing from Lutz 2010 method
   1. jtemp - Lutz method uses simpler method to determine F
-  2. vp - not used in ~WaterBalance:ET_Hamon_daily~
-  3. srad - not used in ~WaterBalance:ET_Hamon_daily~
+  2. Use of Hamon/Penman calculations
+     1. vp - not used in ~WaterBalance:ET_Hamon_daily~
+     2. srad - not used in ~WaterBalance:ET_Hamon_daily~
+     3. SOIL/PACK - Penman/Hamon calculations produce significantly different results for SOIL/PACK.  Within the Simple Water Balance model comparisons, this can account for the difference in magnitudes in CWD calculations, but this does not account for the differences in patterns betwen Hamon SWB and Hamon Lutz calculations.
 - Calculations from daily time series (SWB) instead of 30 yr monthly normals (Lutz)
 
 ** Conclusions
 [cite:@bentzGreatBasinBristlecone2022] determined that the PILO mortality event on Telescope Peak occured at a location that is middle of the road in PILO's climate space.  Their climatic analysis used PRISM 30 year normals and the Hamon method to determine PET, following [cite:@lutzClimaticWaterDeficit2010].  While their code and thus exact method was not provided, we were able to approximately recreate their analysis above, receiving similar results.
 
-Our analysis using the Simple Water Balance model method with Hamon PET calculations placed the Telescope Peak sites in a different climatic space than reported by [cite:@bentzGreatBasinBristlecone2022].  We found that the Telescope Peak sites had extremely low AET (89.2 - 107 mean for all years, mean for all sites for all years = 206), while CWD values were around the average for all sites.   
+Our analysis using the Simple Water Balance model method placed the Telescope Peak sites in a different climatic space than reported by [cite:@bentzGreatBasinBristlecone2022].  Results varied based on choice of PET calculation method (Hamon vs Penman), with Penman returning much higher CWD and AET values than Hamon, and thus a hotter and drier environment.  However, both PET calculations produce the same patterns and relative placement of locations within the Bristlecone climatic space.  With both Penman and Hamon PET calculations, the Simple Water Balance model places the Telescope Peak points at the low extreme of AET values for all sites, and around average for CWD.
+
+Additionally, the Simple Water Balance model shows low snow pack (PACK) values in the years preceding 2017 for the Telescope Peak points.  Interestingly, [cite:@hankinLetItSnow2021] found improved PILO regeneration with decreasing spring snowpack, due to release from energy limitations and longer growing seasons.  While possibly beneficial to PILO seedlings, this temperature release, also reported by [cite:@salzerRecentUnprecedentedTreering2009], may have deleterious effects on PILO or at least on their ability to resist MPB infestation.
 
 
 * Bibliography 
