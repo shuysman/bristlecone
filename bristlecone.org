@@ -1026,14 +1026,11 @@ It looks like the simple water balance is generating results that are at least c
 You outlined a few hypotheses.  Which do you think is most plausible?  What more could be done to evaluate each?  What additional data would you need to resolve which hypothesis seems most reasonable?
 After making it this far, what do you think is the best course of action if were able to pick this project up again? 
 - The simple water balance results indicate that the Panamint range is exceptionally dry in certain measures, PPT, SOIL, and PACK.  However, it is middle of the road among the points in the Bentz data set in CWD (As Bentz et al. found).  In fact, all 4 of the ranges with reported PILO mortality had similar results for these measures in the simple water balance results.  I'm not totally sure how to interpret these results, as my understanding is that CWD should indicate the dryness that the plants are experiencing, however if a measure like snowpack is so low, I would imagine it would have some physiological consequences.
-<<<<<<< HEAD
 
 * Next Steps
 
 ** TODO Validate R implementation of Simple Water Balance Model
 Need to get calculations to match up with excel version
-=======
->>>>>>> 76ee473520127e7e0ef433f78f6f1ade710b20e2
 
 * Discussion
 ** Issues
